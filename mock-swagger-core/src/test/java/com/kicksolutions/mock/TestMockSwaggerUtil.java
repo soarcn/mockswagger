@@ -35,6 +35,29 @@ public class TestMockSwaggerUtil extends TestCase {
 			fail("Cannot Initialize the Util !!");
 		}
 	}
+
+	public void testDefinitions() {
+		ClassLoader classLoader = this.getClass().getClassLoader();
+		File file = new File(classLoader.getResource("account.yml").getFile());
+		if(file!=null)
+		{
+			swaggerPath = file.getParent();
+		}
+		MockSwaggerUtil mockSwaggerUtil = MockSwaggerUtil.getInstance(swaggerPath, true,false);
+		assertNotNull(mockSwaggerUtil.swaggerDefinitionsMap);
+	}
+
+	public void testExamples() {
+		ClassLoader classLoader = this.getClass().getClassLoader();
+		File file = new File(classLoader.getResource("account.yml").getFile());
+		if(file!=null)
+		{
+			swaggerPath = file.getParent();
+		}
+		MockSwaggerUtil mockSwaggerUtil = MockSwaggerUtil.getInstance(swaggerPath, true,false);
+		MockResponse response = mockSwaggerUtil.getRandomResponse("/v1/account_management/term_deposit_accounts", "GET");
+		assertNotNull(response);
+	}
 	
 	public void testHeadPetSucessResponse() {
 		if(StringUtils.isNotEmpty(swaggerPath)){

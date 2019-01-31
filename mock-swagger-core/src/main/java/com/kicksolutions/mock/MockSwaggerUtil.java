@@ -7,25 +7,25 @@ import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.swing.SwingUtilities;
 
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import io.swagger.inflector.examples.ExampleBuilder;
+import io.swagger.inflector.examples.models.Example;
+import io.swagger.inflector.processors.JsonNodeExampleSerializer;
+import io.swagger.models.*;
+import io.swagger.models.properties.RefProperty;
+import io.swagger.util.Json;
+import io.swagger.util.Yaml;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.util.UriTemplate;
 
 import com.kicksolutions.mock.vo.MockResponse;
 
-import io.swagger.models.Operation;
-import io.swagger.models.Response;
-import io.swagger.models.Swagger;
 import io.swagger.models.parameters.Parameter;
 import io.swagger.parser.SwaggerParser;
 
@@ -40,6 +40,7 @@ public class MockSwaggerUtil {
 
 	private static Map<String, Map<String, Map<String, Response>>> swaggerResponseMap = new TreeMap<>();
 	private static Map<String, Map<String, List<Parameter>>> swaggerRequestMap = new TreeMap<>();
+	static Map<String, Map<String, String>> swaggerDefinitionsMap = new TreeMap<>();
 	private static MockSwaggerUtil INSTANCE = null;
 	private String swaggerFolderPath = null;
 	private boolean onlySucessResponses = false;
@@ -137,6 +138,21 @@ public class MockSwaggerUtil {
 			for (Map.Entry<String, io.swagger.models.Path> entrySet : swaggerPaths.entrySet()) {
 				processSwaggerPath(basePath, entrySet.getKey(), entrySet.getValue());
 			}
+
+			if (swaggerObject.getDefinitions()!=null) {
+				Map examples = new HashMap<String, Example>();
+				for (Map.Entry<String, Model> entrySet : swaggerObject.getDefinitions().entrySet()) {
+					Example example = ExampleBuilder.fromProperty(new RefProperty(entrySet.getKey()), swaggerObject.getDefinitions());
+
+					SimpleModule simpleModule = new SimpleModule().addSerializer(new JsonNodeExampleSerializer());
+					Json.mapper().registerModule(simpleModule);
+					Yaml.mapper().registerModule(simpleModule);
+
+					String jsonResult = Json.pretty(example);
+					examples.put(entrySet.getKey(), jsonResult);
+				}
+				swaggerDefinitionsMap.put(basePath, examples);
+			}
 		}
 	}
 
@@ -161,7 +177,6 @@ public class MockSwaggerUtil {
 	/**
 	 * 
 	 * @param URI
-	 * @param getOperation
 	 */
 	private void populateSwaggerMap(String URI, String method, Operation operation) {
 		if (operation != null) {
@@ -218,9 +233,9 @@ public class MockSwaggerUtil {
 				if (responses != null) {
 
 					if (onlySucessResponses) {
-						return getSucessResponse(responses);
+						return getSucessResponse(responses,URI);
 					} else {
-						return getRandomResponse(responses);
+						return getRandomResponse(responses,URI);
 					}
 				} else {
 					throw new MockException(method, URI);
@@ -247,7 +262,7 @@ public class MockSwaggerUtil {
 	 * @param responses
 	 * @return
 	 */
-	private MockResponse getSucessResponse(Map<String, Response> responses) {
+	private MockResponse getSucessResponse(Map<String, Response> responses,String URI) {
 		List<String> keys = new ArrayList<>();
 		Random random = new Random();
 
@@ -261,7 +276,7 @@ public class MockSwaggerUtil {
 		if (!keys.isEmpty()) {
 			String sucessCode = keys.get(random.nextInt(keys.size()));
 
-			return getRandomExamplesfromResponse(sucessCode, (Response) responses.get(sucessCode));
+			return getRandomExamplesfromResponse(sucessCode, (Response) responses.get(sucessCode), URI);
 		}
 
 		return null;
@@ -272,13 +287,13 @@ public class MockSwaggerUtil {
 	 * @param responses
 	 * @return
 	 */
-	private MockResponse getRandomResponse(Map<String, Response> responses) {
+	private MockResponse getRandomResponse(Map<String, Response> responses,String URI) {
 		Random random = new Random();
 
 		if (responses != null) {
 			List<String> keys = new ArrayList<>(responses.keySet());
 			String randomKey = keys.get(random.nextInt(keys.size()));
-			return getRandomExamplesfromResponse(randomKey, (Response) responses.get(randomKey));
+			return getRandomExamplesfromResponse(randomKey, responses.get(randomKey),URI);
 		}
 
 		return null;
@@ -289,9 +304,23 @@ public class MockSwaggerUtil {
 	 * @param response
 	 * @return
 	 */
-	private MockResponse getRandomExamplesfromResponse(String responseCode, Response response) {
+	private MockResponse getRandomExamplesfromResponse(String responseCode, Response response,String URI) {
 		Map<String, Object> examples = response.getExamples();
 		MockResponse mockResponse = null;
+
+		if (examples == null && !swaggerDefinitionsMap.isEmpty()) {
+			if (response.getResponseSchema() instanceof RefModel) {
+				String ref = ((RefModel) response.getResponseSchema()).getSimpleRef();
+
+				for (Map.Entry<String, Map<String,String>> entrySet : swaggerDefinitionsMap.entrySet()) {
+					if (URI.startsWith(entrySet.getKey())) {
+						Object example = entrySet.getValue().get(ref);
+						examples = new HashMap<>();
+						examples.put(entrySet.getKey(),example);
+					}
+				}
+			}
+		}
 
 		if (examples != null) {
 			Random random = new Random();

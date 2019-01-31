@@ -36,7 +36,7 @@ public class MockSwaggerServlet extends HttpServlet {
 	@Override
 	public void init() throws ServletException {
 		String definitionsPath = System.getProperty("swaggerLocation");
-		boolean mockSucessResponses = Boolean.parseBoolean(System.getProperty("mockSuccessResponsesOnly", "false"));
+		boolean mockSucessResponses = Boolean.parseBoolean(System.getProperty("mockSuccessResponsesOnly", "true"));
 
 		if (StringUtils.isNotEmpty(definitionsPath)) {
 			mockSwaggerUtil = MockSwaggerUtil.getInstance(definitionsPath, mockSucessResponses, true);
@@ -103,7 +103,7 @@ public class MockSwaggerServlet extends HttpServlet {
 		resp.setContentType("application/json");
 		resp.setCharacterEncoding("utf-8");
 
-		if (StringUtils.isNotEmpty(contentType) && contentType.equalsIgnoreCase("application/json") && ("GET" != method.intern())) {
+		if (true) {
 
 			LOGGER.log(Level.INFO, "Processing Request for " + req.getRequestURI() + " Method: " + method);
 
